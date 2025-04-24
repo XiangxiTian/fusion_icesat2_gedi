@@ -105,9 +105,6 @@ We present a data fusion/regression framework that:
 ```
 
 ## Installation & Dependencies
-- Python 3.8+  
-- numpy, pandas, scikit-learn, rasterio, geopandas, matplotlib  
-
 ```bash
 pip install -r requirements.txt
 ```
