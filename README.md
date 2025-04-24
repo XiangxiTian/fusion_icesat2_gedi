@@ -109,7 +109,7 @@ We present a data fusion/regression framework that:
 pip install -r requirements.txt
 ```
 
-## Usage
+<!-- ## Usage
 
 1. **Preprocess & filter data**  
    ```bash
@@ -126,5 +126,5 @@ pip install -r requirements.txt
 4. **Evaluate & visualize**  
    ```bash
    python src/evaluate.py      --dem results/dem_30m.tif      --reference data/3DEP/      --out results/metrics.csv
-   ```
+   ``` -->
 
