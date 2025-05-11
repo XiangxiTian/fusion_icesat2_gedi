@@ -1,5 +1,5 @@
 
-# A python implementation on ICESat-2 Controlled Integration of GEDI and SRTM Data for Large-Scale Digital Elevation Model Generation
+# Official Python implementation on ICESat-2 Controlled Integration of GEDI and SRTM Data for Large-Scale Digital Elevation Model Generation
 
 **Authors:** Xiangxi Tian & Jie Shan  
 **Affiliation:** Purdue University
