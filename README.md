@@ -1,5 +1,5 @@
 
-# A python implementation on ICESat-2 Controlled Integration of GEDI and SRTM Data for Large-Scale Digital Elevation Model Generation
+# An official python implementation on ICESat-2 Controlled Integration of GEDI and SRTM Data for Large-Scale Digital Elevation Model Generation
 
 **Authors:** Xiangxi Tian & Jie Shan  
 **Affiliation:** Purdue University
@@ -62,69 +62,68 @@ This repository implements a fusion framework that leverages the high-accuracy I
    - Kernel Ridge Regression (KRR) with RBF kernel  
    - Support Vector Regression (SVR) with RBF kernel  
 
-## Results
+---
 
-### RMSE Comparison (m)
+## Main Script
 
-| Model | Tippecanoe 30 m | Tippecanoe 90 m | Mendocino 30 m | Mendocino 90 m |
-|-------|-----------------|-----------------|----------------|----------------|
-| KRR   | 2.83            | 1.93            | 12.81          | 20.61          |
-| RFR   | 2.15            | 1.25            |  8.25          | 14.38          |
-| SVR   | 1.54            | 1.45            |  7.50          | 13.42          |
+### `main_tipp.py`
 
-> All three models significantly outperform SRTM, achieving up to ~30% lower RMSE.
+This script is the entry point for running the DEM regression and ablation analysis pipeline for the "Tipp" region. It performs the following tasks:
 
-### Error Distributions & Bias
-- **Tippecanoe (30 m)**: SVR yields median error ≈ −0.49 m, σ ≈ 3.39 m.  
-- **Mendocino (30 m)**: SVR yields median ≈ −1.89 m, σ ≈ 26.03 m.  
-- The fusion framework reduces DEM bias by ~85% compared to SRTM.
+- Loads and preprocesses DEM and GEDI/ICESat-2 data.
+- Trains regression models (Random Forest, SVR, KRR, etc.) to predict DEM errors.
+- Evaluates model performance.
+- Generates and saves prediction rasters.
+- Produces visualizations such as histograms of elevation differences.
 
-### Enhanced GEDI Data
-- The filtered GEDI product becomes fully usable after bias correction.  
-- Systematic errors are minimized, enabling dense, reliable point‑cloud coverage.
+---
 
-## Conclusion
-We present a data fusion/regression framework that:
-- Integrates ICESat-2 and GEDI for DEM refinement  
-- Enhances SRTM’s vertical accuracy by ~30% RMSE reduction and ~85% bias decrease  
-- Is scalable to additional spaceborne or irregular elevation datasets
+## Usage
 
-## Repository Structure
-```
-.
-├── data/                 # Raw ATL08, GEDI & reference DEM tiles
-├── notebooks/            # EDA, feature‑importance & error analysis
-├── src/
-│   ├── preprocess.py     # Filtering & feature extraction
-│   ├── train_model.py    # Train RFR, KRR, SVR
-│   ├── predict_dem.py    # Generate enhanced DEMs
-│   └── evaluate.py       # RMSE & error distribution
-├── results/              # Generated DEMs & evaluation figures
-├── requirements.txt      # Python dependencies
-└── README.md             # This file
-```
+### 1. Install Requirements
 
-## Installation & Dependencies
+Make sure you have all dependencies installed. You can use `requirements.txt` if provided:
+
 ```bash
+conda create -n test python==3.8.17
+conda activate test
 pip install -r requirements.txt
 ```
 
-<!-- ## Usage
+### 2. Prepare Data
 
-1. **Preprocess & filter data**  
-   ```bash
-   python src/preprocess.py      --icesat2 data/ATL08/      --gedi data/GEDI/      --out data/processed/
-   ```
-2. **Train regression models**  
-   ```bash
-   python src/train_model.py      --input data/processed/      --model_dir models/
-   ```
-3. **Generate enhanced DEM**  
-   ```bash
-   python src/predict_dem.py      --model models/svr.pkl      --resolution 30      --out results/dem_30m.tif
-   ```
-4. **Evaluate & visualize**  
-   ```bash
-   python src/evaluate.py      --dem results/dem_30m.tif      --reference data/3DEP/      --out results/metrics.csv
-   ``` -->
+- Place your DEM and GEDI/ICESat-2 data in the appropriate directories as expected by the scripts.
+- Update paths in `main_tipp.py` and config files if necessary.
 
+### 3. Run the Main Script
+
+```bash
+python main_tipp.py
+```
+
+You can modify parameters (e.g., regression method, resolutions) directly in `main_tipp.py`.
+
+---
+
+## Key Files
+
+- **main_tipp.py**: Main workflow script for the Tipp region.
+- **GEDI.py**: Contains functions for DEM error analysis and plotting.
+- **regression.py**: Implements regression models and hyperparameter tuning.
+- **general.py**: Utility functions for raster and data handling.
+
+---
+
+## Output
+
+- Model performance metrics printed to the console.
+- Prediction rasters saved to output directories.
+- CSV files summarizing ablation effects.
+- Plots (e.g., histograms) saved or displayed.
+
+---
+
+## Customization
+
+- To change regression methods or parameters, edit the relevant sections in `main_tipp.py`.
+- To add new ablation scenarios or resolutions, update the corresponding lists.
