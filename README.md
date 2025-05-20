@@ -93,6 +93,19 @@ pip install -r requirements.txt
 ### 2. Prepare Data
 
 - Place your DEM and GEDI/ICESat-2 data in the appropriate directories as expected by the scripts.
+- The prepared dataset should follow the directory structure:
+```
+data/
+├── ATL08
+|     └── ATL08_total.csv
+├── egm/geoids/
+|     └── egm2008-5.pgm
+├── GEDI
+|     └── GEDI_L2A.csv
+└── others
+      ├── srtm.tif   
+      └── 3DEP_DEM.tif
+```
 - Update paths in `main_tipp.py` and config files if necessary.
 
 ### 3. Run the Main Script
