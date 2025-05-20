@@ -2,28 +2,23 @@ import h5py
 import os
 from zipfile import ZipFile
 from pyproj import Proj, transform
-from osgeo import ogr, osr
+# from osgeo import ogr, osr
 import numpy as np
+import math
 import csv
 import pandas as pd
 import icepyx as ipx
 import scipy.spatial as spatial
+import general
 from itertools import repeat
 from multiprocessing import Pool
 import multiprocessing.pool as mpp
 import tqdm
 
 
-# import plotly.graph_objects as go
-# from plotly.offline import iplot
-# import pptk
-# from mpl_toolkits.basemap import Basemap
-
-
 def download_hdf5(product, bbox, dates_range, root_path):
     region_tipp = ipx.Query(product, bbox, dates_range, start_time='00:00:00', end_time='23:59:59')
     region_tipp.earthdata_login(uid='txx1220', email='txx1220@gmail.com')
-    # region_tipp.earthdata_login()
     region_tipp.download_granules(root_path)
 
 
@@ -43,15 +38,15 @@ def hdf2csv(atl08_dir, epsg):
     OA_BEAMS = ['gt1r', 'gt1l', 'gt2r', 'gt2l', 'gt3r', 'gt3l']
     fnames = [x for x in os.listdir(atl08_dir) if x.endswith('.h5')]
     fpaths = [os.path.abspath(os.path.join(atl08_dir, x)) for x in
-              os.listdir(atl08_dir) if x.endswith('.h5')]
+             os.listdir(atl08_dir) if x.endswith('.h5')]
     for i, fpath in enumerate(fpaths):
         fname = fnames[i]
-        print('processing file NO. {}/{}.'.format(i + 1, len(fpaths)))
+        print('processing file NO. {}/{}.'.format(i+1, len(fpaths)))
         print(fname)
 
         with h5py.File(fpath, 'r') as f:
             track_id = list(f.get('orbit_info/rgt'))
-            # orbit_orient = list(f.get('orbit_info/sc_orient'))
+            orbit_orient = list(f.get('orbit_info/sc_orient'))
             # series = []
             beam_id = []
             seg_id_beg, seg_id_end = [], []
@@ -89,15 +84,9 @@ def hdf2csv(atl08_dir, epsg):
                     beam_id = beam_id + ([beam] * len(seg_id_beg))
             for j, longitude in enumerate(lon):
                 # print(type(longitude), type(lat[j]))
-                tmp = projection(float(longitude), float(lat[j]), 4326, epsg)
+                tmp = general.point_project(float(longitude), float(lat[j]), 4326, epsg)
                 X.append(tmp[0])
                 Y.append(tmp[1])
-            if (X[0] - X[1]) * (Y[0] - Y[1]) > 0:
-                orbit_orient = [0]
-            elif (X[0] - X[1]) * (Y[0] - Y[1]) < 0:
-                orbit_orient = [1]
-            else:
-                orbit_orient = [-1]
             temp_df = list(
                 zip([fname] * len(seg_id_beg), track_id * len(seg_id_beg), orbit_orient * len(seg_id_beg),
                     beam_id, seg_id_beg, seg_id_end,
@@ -108,10 +97,14 @@ def hdf2csv(atl08_dir, epsg):
             df = pd.DataFrame(temp_df, columns=[
                 'fname', 'track_id', 'orbit_orient', 'beam', 'seg_id_beg', 'seg_id_end',
                 'lon', 'lat', 'X', 'Y',
-                'h_te_bestfit', 'h_te_interp', 'h_te_median', "h_te_mean", 'h_te_uncert', 'al_track_slope',
+                'h_te_bestfit', 'h_te_interp', 'h_te_median', "h_te_mean", 'h_te_uncert', 'along_track_slope',
                 'terrian_n_ph', 'h_canopy', 'h_canopy_uncertainty', 'canopy_cover',
                 'atlas_pa', 'beam_azimuth', 'beam_coelev', 'day_night', 'snow'])
             df.to_csv(fpath.replace('.h5', '.csv'))
+
+#
+# def get_along_track_slope(x, y, h):
+#
 
 
 def csv_merge(rawdatapath):
@@ -150,20 +143,20 @@ def uncertainty_filtering(atl08_data):
     uncertainty = atl08_data[:, -1]
 
 
-def projection(lon, lat, in_epsg, out_epsg):
-    point = ogr.Geometry(ogr.wkbPoint)
-    point.AddPoint(lat, lon)
-
-    inRef = osr.SpatialReference()
-    inRef.ImportFromEPSG(in_epsg)
-    outRef = osr.SpatialReference()
-    outRef.ImportFromEPSG(out_epsg)
-
-    coordT = osr.CoordinateTransformation(inRef, outRef)
-    point.Transform(coordT)
-    X = point.GetX()
-    Y = point.GetY()
-    return X, Y
+# def projection(lon, lat, in_epsg, out_epsg):
+#     point = ogr.Geometry(ogr.wkbPoint)
+#     point.AddPoint(lat, lon)
+#
+#     inRef = osr.SpatialReference()
+#     inRef.ImportFromEPSG(in_epsg)
+#     outRef = osr.SpatialReference()
+#     outRef.ImportFromEPSG(out_epsg)
+#
+#     coordT = osr.CoordinateTransformation(inRef, outRef)
+#     point.Transform(coordT)
+#     X = point.GetX()
+#     Y = point.GetY()
+#     return X, Y
 
 
 def get_slope(target, sources_upper, sources_lower):
@@ -180,18 +173,6 @@ def get_slope(target, sources_upper, sources_lower):
     idx_upper = sorted_idx_upper[:3]
     sorted_idx_lower = np.argsort(dist_m_lower.flatten())
     idx_lower = sorted_idx_lower[:3]
-
-    # dist_upper12 = spatial.distance.euclidean(sources_upper[idx_upper[1], 0:2], sources_upper[idx_upper[2], 0:2])
-    # if sources_upper[idx_upper[1], 1] < sources_upper[idx_upper[2], 1]:
-    #     slope_upper = (sources_upper[idx_upper[2], 2] - sources_upper[idx_upper[1], 2]) / dist_upper12
-    # else:
-    #     slope_upper = (sources_upper[idx_upper[1], 2] - sources_upper[idx_upper[2], 2]) / dist_upper12
-    #
-    # dist_lower12 = spatial.distance.euclidean(sources_lower[idx_lower[1], 0:2], sources_lower[idx_lower[2], 0:2])
-    # if sources_lower[idx_lower[1], 1] < sources_lower[idx_lower[2], 1]:
-    #     slope_lower = (sources_lower[idx_lower[2], 2] - sources_lower[idx_lower[1], 2]) / dist_lower12
-    # else:
-    #     slope_lower = (sources_lower[idx_lower[1], 2] - sources_lower[idx_lower[2], 2]) / dist_lower12
 
     slope_upper = sources_upper[idx_upper[0], 3]
     slope_lower = sources_lower[idx_lower[0], 3]
@@ -213,20 +194,51 @@ def get_slope(target, sources_upper, sources_lower):
     return slope_along_track, slope_across_track
 
 
-def calc_slope(target, source_pts):
+def get_nn_orbits(target, source_pts):
+    sources_ID = np.arange(0, source_pts.shape[0], 1, dtype=int)
     source_orient0 = source_pts[source_pts[:, 4] == 0, :]
+    source_orient0_ID = sources_ID[source_pts[:, 4] == 0]
     source_orient1 = source_pts[source_pts[:, 4] == 1, :]
+    source_orient1_ID = sources_ID[source_pts[:, 4] == 1]
+    X, Y = target[0], target[1]
+    nnID = np.zeros(4)
+
+    sources_4 = source_orient0[(source_orient0[:, 0] >= X) & (source_orient0[:, 1] >= Y), :]
+    sources_4_ID = source_orient0_ID[(source_orient0[:, 0] >= X) & (source_orient0[:, 1] >= Y)]
+    sources_2 = source_orient0[(source_orient0[:, 0] < X) & (source_orient0[:, 1] < Y), :]
+    sources_2_ID = source_orient0_ID[(source_orient0[:, 0] < X) & (source_orient0[:, 1] < Y)]
+    sources_1 = source_orient1[(source_orient1[:, 0] >= X) & (source_orient1[:, 1] >= Y), :]
+    sources_1_ID = source_orient1_ID[(source_orient1[:, 0] >= X) & (source_orient1[:, 1] >= Y)]
+    sources_3 = source_orient1[(source_orient1[:, 0] < X) & (source_orient1[:, 1] < Y), :]
+    sources_3_ID = source_orient1_ID[(source_orient1[:, 0] < X) & (source_orient1[:, 1] < Y)]
+
+    dist, idx = general.nn(target, sources_4)
+    
+
+
+
+def calc_slope(target, source_pts):
+    sources_ID = np.arange(0, source_pts.shape[0], 1, dtype=int)
+    source_orient0 = source_pts[source_pts[:, 4] == 0, :]
+    source_orient0_ID = sources_ID[source_pts[:, 4] == 0]
+    source_orient1 = source_pts[source_pts[:, 4] == 1, :]
+    source_orient1_ID = sources_ID[source_pts[:, 4] == 1]
     X, Y = target[0], target[1]
     slopes = np.zeros(4)
 
     sources_4 = source_orient0[(source_orient0[:, 0] >= X) & (source_orient0[:, 1] >= Y), :]
+    sources_4_ID = source_orient0_ID[(source_orient0[:, 0] >= X) & (source_orient0[:, 1] >= Y)]
     sources_2 = source_orient0[(source_orient0[:, 0] < X) & (source_orient0[:, 1] < Y), :]
+    sources_2_ID = source_orient0_ID[(source_orient0[:, 0] < X) & (source_orient0[:, 1] < Y)]
     sources_1 = source_orient1[(source_orient1[:, 0] >= X) & (source_orient1[:, 1] >= Y), :]
+    sources_1_ID = source_orient1_ID[(source_orient1[:, 0] >= X) & (source_orient1[:, 1] >= Y)]
     sources_3 = source_orient1[(source_orient1[:, 0] < X) & (source_orient1[:, 1] < Y), :]
+    sources_3_ID = source_orient1_ID[(source_orient1[:, 0] < X) & (source_orient1[:, 1] < Y)]
 
     if (sources_1.shape[0] < 3) and (sources_3.shape[0] < 3):
         slopes[0] = 0
         slopes[2] = 0
+
     else:
         flag = 0
         if (sources_1.shape[0] < 3) and (sources_3.shape[0] >= 3):
@@ -326,140 +338,32 @@ def istarmap(self, func, iterable, chunksize=1):
         ))
     return (item for chunk in result for item in chunk)
 
-
 mpp.Pool.istarmap = istarmap
+
 
 def get_slopes(targets, source_pts):
     print("calc slopes from ATL08")
     input = zip(targets, repeat(source_pts))
     slopes = []
-    with Pool(processes=8) as pool:
+    nnIDs = []
+    n_workers = 8
+    chunk_size = 100
+    with Pool(processes=n_workers) as pool:
         # slopes = pool.starmap(calc_slope, tqdm.tqdm(input, total=len(targets)))
-        for slope in tqdm.tqdm(pool.istarmap(calc_slope, input, chunksize=5), total=len(targets)):
+        for slope, ID in tqdm.tqdm(pool.istarmap(calc_slope, input, chunksize=chunk_size), total=len(targets)):
             slopes.append(slope)
-
-    # num_targets = targets.shape[0]
-    # slope_along_track = np.zeros((num_targets, 2))
-    # slope_across_track = np.zeros((num_targets, 2))
-    #
-    # source_orient0 = source_pts[source_pts[:, 4] == 0, :]
-    # source_orient1 = source_pts[source_pts[:, 4] == 1, :]
-    #
-    # for i, target in enumerate(targets):
-    #     if i % 10000 == 0:
-    #         print("======== GEDI {}%, {} / {} =========".format(100 * i / num_targets, i, num_targets))
-    #     X, Y = target[0], target[1]
-    #     sources_4 = source_orient0[(source_orient0[:, 0] >= X) & (source_orient0[:, 1] >= Y), :]
-    #     sources_2 = source_orient0[(source_orient0[:, 0] < X) & (source_orient0[:, 1] < Y), :]
-    #     sources_1 = source_orient1[(source_orient1[:, 0] >= X) & (source_orient1[:, 1] >= Y), :]
-    #     sources_3 = source_orient1[(source_orient1[:, 0] < X) & (source_orient1[:, 1] < Y), :]
-    #     if (sources_1.shape[0] < 3) and (sources_3.shape[0] < 3):
-    #         continue
-    #     else:
-    #         slope_along_track[i, 0], slope_across_track[i, 0] = get_slope(target, sources_1, sources_3)
-    #
-    #     if (sources_2.shape[0] < 3) or (sources_4.shape[0] < 3):
-    #         continue
-    #     else:
-    #         slope_along_track[i, 1], slope_across_track[i, 1] = get_slope(target, sources_2, sources_4)
-    # slopes = np.concatenate((slope_along_track, slope_across_track), axis=1)
-
-    return slopes
+            nnIDs.append(ID)
+    return slopes, nnIDs
 
 
+# root_dir = "E:\\OneDrive - purdue.edu\\Projects\\GEDI_ICESAT2\\data\\"
+# atl08_dir = root_dir + "ATL08\\sanborn\\rawdata\\"
+# product = 'ATL08'
+# bbox = [-88.05457749878411, 37.816498862018186, -84.76966538940911, 41.78174686595749]
+# bbox_piute = [-112.33474710844403, 38.155618239910304, -111.84860208891278, 38.50035641539945]
+# bbox_sanborn = [-98.33026891855741, 43.85264904206784, -97.85099035410428, 44.19628206013791]
 
-root_dir = "E:\\OneDrive - purdue.edu\\Projects\\GEDI_ICESAT2\\data\\"
-atl08_dir = root_dir + "ATL08\\sanborn\\rawdata\\"
-product = 'ATL08'
-bbox = [-88.05457749878411, 37.816498862018186, -84.76966538940911, 41.78174686595749]
-bbox_piute = [-112.33474710844403, 38.155618239910304, -111.84860208891278, 38.50035641539945]
-bbox_sanborn = [-98.33026891855741, 43.85264904206784, -97.85099035410428, 44.19628206013791]
-
-dates_range = ['2018-01-02', '2022-12-14']
-download_hdf5(product, bbox_sanborn, dates_range, atl08_dir)
-hdf2csv(atl08_dir, 2842)
-csv_merge(atl08_dir)
-
-# def visualization(rawdatapath, csv_name):
-#     df = pd.read_csv(rawdatapath + csv_name)
-#
-#     P = np.stack((np.array(df['lat']), np.array(df['lon']), np.array(df['h_te_bestfit'])), axis=-1)
-#     v = pptk.viewer(P)
-#     v.set(point_size=0.01)
-#
-#     fig=plt.figure()
-#     ax=Axes3D(fig)
-#     ax.scatter(df['lat'],df['lon'],df['h_te_bestfit'],c='r')
-#     plt.show()
-#
-#     oa_plots = []
-#     oa_plots.append(go.Scatter3d(x=df['lat'], y=df['lon'], z=df['h_te_bestfit'],
-#                                         marker=dict(
-#                                             size=2,
-#                                             color='black',
-#                                             # colorscale='Viridis',   # choose a colorscale
-#                                             opacity=0.8
-#                                         )))
-#     oa_plots.append(go.Scatter3d(x=df['lat'], y=df['lon'], z=df['h_te_bestfit']+df['h_canopy'],
-#                                         marker=dict(
-#                                             size=2,
-#                                             color='green',
-#                                             # colorscale='Viridis',   # choose a colorscale
-#                                             opacity=0.8
-#                                         )))
-#     layout = go.Layout(
-#         width=2400,
-#         height=1200,
-#         scene=dict(aspectmode='manual', aspectratio=dict(x=1, y=1, z=0.5),
-#                    xaxis=dict(title='Latitude'), yaxis=dict(title='Longitude'), zaxis=dict(title='Elevation (m)'))
-#     )
-#
-#     print('Plotting...')
-#
-#     fig = go.Figure(data=oa_plots, layout=layout)
-#
-#     iplot(fig)
-#
-#     height = np.stack((dist_ph_along, h_ph, lon_ph, lat_ph), axis=-1)
-#     segment = np.stack((seg_id, seg_ph_cnt, ph_indx_beg, seg_len), axis=-1)
-#
-#     # with open('gt2lATL03_height.csv','w') as f:
-#     #     writer=csv.writer(f,delimiter=',')
-#     #     writer.writerows(height)
-#     # with open('gt2lATL03_segment5.csv','w') as f:
-#     #     writer=csv.writer(f,delimiter=',')
-#     #     writer.writerows(segment)
-#
-#     # # flist=['class','h_ph','seg_id','seg_cnt','ph_indx']
-#     # class_ph=np.stack((classed_pc_indx,classed_pc_flag,ph_seg_id),axis=-1)
-#     # with open('gt2lATL03_class_ph5.csv','w') as f:
-#     #     writer=csv.writer(f,delimiter=',')
-#     #     writer.writerows(class_ph)
-#     # lat=np.min(height[:][2])
-#     # lon=np.min(height[:][3])
-#     # coors=height[:,2:4]
-#     # print(coors)
-#     # coors5=height5[:,2:4]
-#     # m=folium.Map(location=[lat,lon],zoom_start=6)
-#     # FastMarkerCluster(data=coors).add_to(m)
-#     # folium.LayerControl().add_to(m)
-#     # for c in coors:
-#     #     # folium.Marker(location=[c[0],c[1]],fill_color='#43d9de', radius=2).add_to(m)
-#     #     folium.CircleMarker(radius=2,location=[c[0],c[1]],color='red').add_to(m)
-#     # print('done!')
-#     # for c in coors5:
-#     #     # folium.Marker(location=[c[0],c[1]],fill_color='#3186cc', radius=2).add_to(m)
-#     #     folium.Circle(radius=2,location=[c[0],c[1]],color='blue').add_to(m)
-#     # print('done!')
-#     # m.save('map1.html')
-#
-#     # fig = plt.figure(figsize=(8, 8))
-#     # m = Basemap(projection='lcc', resolution='h',
-#     #             lat_0=lat, lon_0=lon,
-#     #             width=1E6, height=1.2E6)
-#     # m.shadedrelief()
-#     # m.drawcoastlines(color='gray')
-#     # m.drawcountries(color='gray')
-#     # m.drawstates(color='gray')
-#     # m.scatter(coors[:,1], coors[:,0], latlon=True,
-#     #           cmap='Reds', alpha=0)
+# dates_range = ['2018-01-02', '2022-12-14']
+# download_hdf5(product, bbox_sanborn, dates_range, atl08_dir)
+# hdf2csv(atl08_dir, 2842)
+# csv_merge(atl08_dir)

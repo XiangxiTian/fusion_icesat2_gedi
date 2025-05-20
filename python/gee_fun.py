@@ -192,5 +192,3 @@ def getGEDI_file_name(start_time, end_time, minx, maxx, miny, maxy, save_path):
 #
 # img_collection = ee.ImageCollection('LARSE/GEDI/GEDI02_A_002_MONTHLY')
 # img_collection = img_collection.filterBounds(bbox)
-
-
